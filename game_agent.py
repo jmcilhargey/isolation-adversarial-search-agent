@@ -8,11 +8,9 @@ relative strength using tournament.py and include the results in your report.
 """
 import random
 
-
 class Timeout(Exception):
     """Subclass base exception for code clarity."""
     pass
-
 
 def custom_score(game, player):
     """Calculate the heuristic value of a game state from the point of view
@@ -36,10 +34,36 @@ def custom_score(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
+    return calc_move_diff(game, player)
 
-    # TODO: finish this function!
-    raise NotImplementedError
+def calc_move_diff(game, player):
+    """Calculate the heuristic value of a game state from the point of view
+    of the given player.
 
+    Note: this function should be called from within a Player instance as
+    `self.score()` -- you should not need to call this function directly.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    -------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+    num_curr_moves = len(game.get_legal_moves(player))
+    num_opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    if num_opp_moves == 0:
+        return float("inf")
+    else:
+        return float(num_curr_moves - num_opp_moves)
 
 class CustomPlayer:
     """Game-playing agent that chooses a move using your evaluation function
@@ -129,14 +153,18 @@ class CustomPlayer:
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
-            pass
+            best_move = (-1, -1)
+            if self.method == 'minimax':
+                best_diff, best_move = self.minimax(game, self.search_depth)
+            elif self.method == 'alphabeta':
+                best_diff, best_move = 0, (-1, -1)
 
         except Timeout:
             # Handle any actions required at timeout, if necessary
+            print('Timeout')
             pass
-
         # Return the best move from the last completed search iteration
-        raise NotImplementedError
+        return best_move
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
@@ -172,8 +200,27 @@ class CustomPlayer:
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        possible_moves = game.get_legal_moves()
+
+        if depth == 0 or not possible_moves:
+            score_diff = self.score(game, self)
+            return score_diff, (-1, -1)
+
+        overall_best_move = (-1, -1)
+        highest_move_diff = float("-inf") if maximizing_player else float("inf")
+
+        for next_move in possible_moves:
+            temp_board = game.forecast_move(next_move)
+            curr_move_diff, curr_best_move = self.minimax(temp_board, depth - 1, not maximizing_player)
+            if maximizing_player:
+                if curr_move_diff > highest_move_diff:
+                    highest_move_diff = curr_move_diff
+                    overall_best_move = next_move
+            else:
+                if curr_move_diff < highest_move_diff:
+                    highest_move_diff = curr_move_diff
+                    overall_best_move = next_move
+        return highest_move_diff, overall_best_move
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf"), maximizing_player=True):
         """Implement minimax search with alpha-beta pruning as described in the
