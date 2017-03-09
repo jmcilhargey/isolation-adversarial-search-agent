@@ -7,6 +7,7 @@ You must test your agent's strength against a set of agents with known
 relative strength using tournament.py and include the results in your report.
 """
 import random
+import math
 
 class Timeout(Exception):
     """Subclass base exception for code clarity."""
@@ -34,14 +35,11 @@ def custom_score(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
-    return calc_move_diff(game, player)
+    return calc_move_diff_from_center(game, player)
 
-def calc_move_diff(game, player):
-    """Calculate the heuristic value of a game state from the point of view
-    of the given player.
-
-    Note: this function should be called from within a Player instance as
-    `self.score()` -- you should not need to call this function directly.
+def calc_ratio_of_moves(game, player):
+    """A hueristic which takes the simple ratio of player and opponent moves
+    as a scoring metric.
 
     Parameters
     ----------
@@ -58,12 +56,94 @@ def calc_move_diff(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
-    num_curr_moves = len(game.get_legal_moves(player))
-    num_opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    if num_opp_moves == 0:
+    player_factor = 1
+    opp_factor = 1
+    player_moves = game.get_legal_moves(player)
+    opp_moves = game.get_legal_moves(game.get_opponent(player))
+    if not opp_moves:
         return float("inf")
+    elif not player_moves:
+        return float("-inf")
     else:
-        return float(num_curr_moves - num_opp_moves)
+        return float(player_factor * len(player_moves) / (opp_factor * len(opp_moves)))
+
+def calc_move_diff_with_spaces(game, player):
+    """A hueristic which takes the difference between player and opponent moves
+    as a scoring metric. The method applies proportional weight factor for
+    opponent moves based on the number of open spaces remaining in the game
+    state.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    -------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+    player_factor = 1
+    opp_factor = 2
+    player_moves = game.get_legal_moves(player)
+    opp_moves = game.get_legal_moves(game.get_opponent(player))
+    open_spaces = len(game.get_blank_spaces())
+    total_spaces = game.width * game.height
+    if not opp_moves:
+        return float("inf")
+    elif not player_moves:
+        return float("-inf")
+    else:
+        return float(player_factor * len(player_moves) * (total_spaces / open_spaces) - opp_factor * len(opp_moves))
+
+def calc_move_diff_from_center(game, player):
+    """A hueristic which weights values depending on their proximity to the center
+    of the board. Center positions are favored over openings on the ouside of the
+    board.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    -------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+    player_factor = 1
+    opp_factor = 2
+    board_center = (math.floor(game.width / 2), math.floor(game.height / 2))
+    player_moves = game.get_legal_moves(player)
+    player_score = 0
+    for move in player_moves:
+        if move == (3, 3):
+            player_score += 1
+        else:
+            player_score += 1 - math.sqrt((board_center[0] - move[0]) ** 2 + (board_center[1] - move[1]) ** 2) / game.width
+    opp_moves = game.get_legal_moves(game.get_opponent(player))
+    opp_score = 0
+    for move in opp_moves:
+        if move == (3, 3):
+            opp_score += 1
+        else:
+            opp_score += 1 - math.sqrt((board_center[0] - move[0]) ** 2 + (board_center[1] - move[1]) ** 2) / game.width
+    if not opp_moves:
+        return float("inf")
+    elif not player_moves:
+        return float("-inf")
+    else:
+        return float(player_factor * player_score - opp_factor * opp_score)
 
 class CustomPlayer:
     """Game-playing agent that chooses a move using your evaluation function
@@ -96,7 +176,7 @@ class CustomPlayer:
     """
 
     def __init__(self, search_depth=3, score_fn=custom_score,
-                 iterative=True, method='minimax', timeout=10.):
+                 iterative=True, method='minimax', timeout=3):
         self.search_depth = search_depth
         self.iterative = iterative
         self.score = score_fn
@@ -141,30 +221,50 @@ class CustomPlayer:
         """
 
         self.time_left = time_left
-
-        # TODO: finish this function!
-
         # Perform any required initializations, including selecting an initial
         # move from the game board (i.e., an opening book), or returning
         # immediately if there are no legal moves
+        if not legal_moves:
+            # print('No available moves')
+            return (-1, -1)
 
-        try:
-            # The search method call (alpha beta or minimax) should happen in
-            # here in order to avoid timeout. The try/except block will
-            # automatically catch the exception raised by the search method
-            # when the timer gets close to expiring
-            best_move = (-1, -1)
-            if self.method == 'minimax':
-                best_diff, best_move = self.minimax(game, self.search_depth)
-            elif self.method == 'alphabeta':
-                best_diff, best_move = 0, (-1, -1)
+        if self.iterative:
+            # Start searching at first level to find the best move so far
+            curr_depth = 1
+            best_move_overall = (-1, -1)
+            best_score_overall = float("-inf")
+            while True:
+                # Iteratively deepen the search by increasing the search limit by 1
+                # each round. Terminates when timeout or solution found
+                try:
+                    if self.method == 'minimax':
+                        best_round_score, best_round_move = self.minimax(game, curr_depth)
+                    elif self.method == 'alphabeta':
+                        best_round_score, best_round_move = self.alphabeta(game, curr_depth)
+                    if best_score_overall < best_round_score:
+                        best_move_overall = best_round_move
+                        best_score_overall = best_round_score
+                    curr_depth += 1
+                except Timeout:
+                    # Handle any actions required at timeout, if necessary
+                    # print('Iterative deepening timeout')
+                    break
+        else:
+            best_move_overall = (-1, -1)
+            try:
+                # The try/except block will automatically catch the exception
+                # raised by the search method when the timer gets close to expiring
+                if self.method == 'minimax':
+                    best_score_overall, best_move_overall = self.minimax(game, self.search_depth)
+                elif self.method == 'alphabeta':
+                    best_score_overall, best_move_overall = self.alphabeta(game, self.search_depth)
 
-        except Timeout:
-            # Handle any actions required at timeout, if necessary
-            print('Timeout')
-            pass
+            except Timeout:
+                # Handle any actions required at timeout, if necessary
+                # print('Search function timeout')
+                pass
         # Return the best move from the last completed search iteration
-        return best_move
+        return best_move_overall
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
@@ -263,5 +363,30 @@ class CustomPlayer:
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        possible_moves = game.get_legal_moves()
+
+        if depth == 0 or not possible_moves:
+            score_diff = self.score(game, self)
+            return score_diff, (-1, -1)
+
+        overall_best_move = (-1, -1)
+        highest_move_diff = float("-inf") if maximizing_player else float("inf")
+
+        for next_move in possible_moves:
+            temp_board = game.forecast_move(next_move)
+            curr_move_diff, curr_best_move = self.alphabeta(temp_board, depth - 1, alpha, beta, not maximizing_player)
+            if maximizing_player:
+                if curr_move_diff > highest_move_diff:
+                    highest_move_diff = curr_move_diff
+                    overall_best_move = next_move
+                if highest_move_diff >= beta:
+                    return curr_move_diff, next_move
+                alpha = max(alpha, curr_move_diff)
+            else:
+                if curr_move_diff < highest_move_diff:
+                    highest_move_diff = curr_move_diff
+                    overall_best_move = next_move, overall_best_move
+                if highest_move_diff <= alpha:
+                    return curr_move_diff, next_move
+                beta = min(beta, curr_move_diff)
+        return highest_move_diff, overall_best_move
