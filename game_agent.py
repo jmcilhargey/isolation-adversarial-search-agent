@@ -35,7 +35,7 @@ def custom_score(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
-    return calc_move_diff_from_center(game, player)
+    return calc_move_diff_with_spaces(game, player)
 
 def calc_ratio_of_moves(game, player):
     """A hueristic which takes the simple ratio of player and opponent moves
@@ -90,6 +90,7 @@ def calc_move_diff_with_spaces(game, player):
     """
     player_factor = 1
     opp_factor = 2
+    space_factor = 1
     player_moves = game.get_legal_moves(player)
     opp_moves = game.get_legal_moves(game.get_opponent(player))
     open_spaces = len(game.get_blank_spaces())
@@ -99,7 +100,7 @@ def calc_move_diff_with_spaces(game, player):
     elif not player_moves:
         return float("-inf")
     else:
-        return float(player_factor * len(player_moves) * (total_spaces / open_spaces) - opp_factor * len(opp_moves))
+        return float(player_factor * len(player_moves) + space_factor * (total_spaces / open_spaces) - opp_factor * len(opp_moves))
 
 def calc_move_diff_from_center(game, player):
     """A hueristic which weights values depending on their proximity to the center
@@ -126,6 +127,8 @@ def calc_move_diff_from_center(game, player):
     board_center = (math.floor(game.width / 2), math.floor(game.height / 2))
     player_moves = game.get_legal_moves(player)
     player_score = 0
+    open_spaces = len(game.get_blank_spaces())
+    total_spaces = game.width * game.height
     for move in player_moves:
         if move == (3, 3):
             player_score += 1
@@ -225,8 +228,12 @@ class CustomPlayer:
         # move from the game board (i.e., an opening book), or returning
         # immediately if there are no legal moves
         if not legal_moves:
-            # print('No available moves')
             return (-1, -1)
+        # """
+        curr_turn = game.width * game.height - len(game.get_blank_spaces()) + 1
+        center_move = (math.ceil(game.width / 2), math.ceil(game.height / 2))
+        if curr_turn == 1:
+            return center_move
 
         if self.iterative:
             # Start searching at first level to find the best move so far
@@ -265,6 +272,46 @@ class CustomPlayer:
                 pass
         # Return the best move from the last completed search iteration
         return best_move_overall
+
+    def is_symmetrical(self, game, legal_moves, time_left):
+        """Checks to see if the next move would return a symmetrial board. If
+        this is the case, the player can duplicate each move to ensure victory
+
+        Parameters
+        ----------
+        game : isolation.Board
+            An instance of the Isolation game `Board` class representing the
+            current game state
+
+        legal_moves : list<(int, int)>
+            A list containing legal moves. Moves are encoded as tuples of pairs
+            of ints defining the next (row, col) for the agent to occupy.
+
+        time_left : callable
+            A function that returns the number of milliseconds left in the
+            current turn. Returning with any less than 0 ms remaining forfeits
+            the game.
+
+        Returns
+        -------
+
+        bool
+            Condition indicating whether the board is symmetrical across
+            horizontal and vertical axis
+        tuple(int, int)
+            The move which the player makes will produce a symmetrical board
+        """
+        last_move = game.get_player_location(game.__inactive_player__)
+        mirrored_move = (last_move[1], last_move[0])
+        if game.move_is_legal(mirrored_move):
+            new_game = game.forecast_move(mirrored_move)
+            for space in new_game.get_legal_moves():
+                mirrored_space = (space[1], space[0])
+                if not game.move_is_legal(mirrored_space):
+                    return False, (-1, -1)
+            return True, mirrored_move
+        else:
+            return False, (-1, -1)
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
