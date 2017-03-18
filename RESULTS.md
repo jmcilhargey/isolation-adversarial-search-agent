@@ -65,7 +65,14 @@ Baseline _**62.14%**_, Implemented _**67.14%**_
 
 With the baseline as a control, we see that the heuristic using board spaces has the highest success rate overall. Using this custom heuristic results in a roughly 15% improvement from the baseline. 
 
-Across different types of players, `calc_move_diff_with_spaces` consistently beats other methods. For example, the MM (minimax) and AB(alpha-beta) opponents using different scoring methods were bested by the heuristic. For these reasons, this is the best choice of the three.
+The results demonstrate that across different types of scoring methods, `calc_move_diff_with_spaces` consistently achieves a higher win rate. For example, the MM (minimax) and AB(alpha-beta) opponents using the baseline heuristic won less games than `calc_move_diff_with_spaces`, by an average of ~3 games per every 20 played. 
 
-Further work could be done to the method by including factors from the other heuristics to see if the win rate improves. One could also experiment with different constant values on the scoring variables and adding an opening book of moves for the player to select automatically without searching.
+If we monitor the search on a move-by-move basis, we see the iterative search depth for `calc_move_diff_with_spaces` is on average greater than the others. Because less processing is done within the function, there is more time available to search deeply in the tree, which in turn leads to better win rate overall.
 
+For the reasons discussed, `calc_move_diff_with_spaces` is the most effective heuristic developed in the project.
+
+Further experimentation could be done by changing the constant values on the scoring variables and adding an opening book of moves. Some basic testing was done by altering the leading constants in the heuristic. For example, a 2 : 1 ratio for the player constant with respect to the opponent constant leads to a slight improvement ~5% in the win rate for `calc_move_diff_with_spaces`.
+
+Additional efforts could also focus on combine the techniques from each of the heuristics to see if there is an improvement in win rate when a combination of factors are used.
+
+Isolation is an excellent model for exploring the challenges presented by artifical intelligence. Because of the large search space, effective solutions must make use of techniques like minimax, alpha-beta pruning, and iterative deepening to find optimal moves and play intelligently. In this project an efficient and effective program was developed to play the game at human-level performance. 
